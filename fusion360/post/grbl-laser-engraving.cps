@@ -4,7 +4,7 @@
 
   Grbl post processor configuration.
 
-  $Revision: 99999 905303e8374380273c82d214b32b7e80091ba92e $
+  $Revision: 42473 905303e8374380273c82d214b32b7e80091ba92e $
   $Date: 2019-09-04 00:46:02 $
   
   FORKID {0A45B7F8-16FA-450B-AB4F-0E1BC1A65FAA}
@@ -44,8 +44,6 @@ properties = {
   etchPower: 200, // set the power for etching
   vaporizePower: 255 // set the power for vaporize
 };
-
-var curr
 
 // user-defined property definitions
 propertyDefinitions = {
@@ -218,34 +216,34 @@ function onSection() {
     }
   }
 
-  if (currentSection.getType() == TYPE_JET) {
-    switch (tool.type) {
-      case TOOL_LASER_CUTTER:
-        break;
-      default:
-        error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
-        return;
-    }
+  // if (currentSection.getType() == TYPE_JET) {
+  //   switch (tool.type) {
+  //     case TOOL_LASER_CUTTER:
+  //       break;
+  //     default:
+  //       error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
+  //       return;
+  //   }
 
-    var power = 0;
-    switch (currentSection.jetMode) {
-      case JET_MODE_THROUGH:
-        power = properties.throughPower;
-        break;
-      case JET_MODE_ETCHING:
-        power = properties.etchPower;
-        break;
-      case JET_MODE_VAPORIZE:
-        power = properties.vaporizePower;
-        break;
-      default:
-        error(localize("Unsupported cutting mode."));
-        return;
-    }
-  } else {
-    error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
-    return;
-  }
+  //   var power = 0;
+  //   switch (currentSection.jetMode) {
+  //     case JET_MODE_THROUGH:
+  //       power = properties.throughPower;
+  //       break;
+  //     case JET_MODE_ETCHING:
+  //       power = properties.etchPower;
+  //       break;
+  //     case JET_MODE_VAPORIZE:
+  //       power = properties.vaporizePower;
+  //       break;
+  //     default:
+  //       error(localize("Unsupported cutting mode."));
+  //       return;
+  //   }
+  // } else {
+  //   error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
+  //   return;
+  // }
 
   // wcs
   var workOffset = currentSection.workOffset;
@@ -274,7 +272,8 @@ function onSection() {
     setRotation(remaining);
   }
 
-  writeBlock(gMotionModal.format(0), sOutput.format(power), mFormat.format(getPowerMode(currentSection)));
+  //writeBlock(gMotionModal.format(0), sOutput.format(power), mFormat.format(getPowerMode(currentSection)));
+  writeBlock(mFormat.format(5)); // power off on beginning
 
   var initialPosition = getFramePosition(currentSection.getInitialPosition());
   writeBlock(gMotionModal.format(0), xOutput.format(initialPosition.x), yOutput.format(initialPosition.y));
@@ -295,13 +294,41 @@ function onRadiusCompensation() {
 }
 
 function onPower(power) {
+  if (currentSection.getType() == TYPE_JET) {
+    switch (tool.type) {
+      case TOOL_LASER_CUTTER:
+        break;
+      default:
+        error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
+        return;
+    }
+
+    var powerLevel = 0;
+    switch (currentSection.jetMode) {
+      case JET_MODE_THROUGH:
+        powerLevel = properties.throughPower;
+        break;
+      case JET_MODE_ETCHING:
+        powerLevel = properties.etchPower;
+        break;
+      case JET_MODE_VAPORIZE:
+        powerLevel = properties.vaporizePower;
+        break;
+      default:
+        error(localize("Unsupported cutting mode."));
+        return;
+    }
+  } else {
+    error(localize("The CNC does not support the required tool/process. Only laser cutting is supported."));
+    return;
+  }
+
   if (power) {
-    writeBlock(mFormat.format(4));
+    writeBlock(mFormat.format(getPowerMode(currentSection)), sOutput.format(powerLevel));
   }
   else {
     writeBlock(mFormat.format(5));
   }
-  
 }
 
 function onRapid(_x, _y, _z) {
@@ -312,8 +339,7 @@ function onRapid(_x, _y, _z) {
       error(localize("Radius compensation mode cannot be changed at rapid traversal."));
       return;
     }
-    //writeBlock(mFormat.format(5)); // M5 laser off while traveling
-    writeBlock(gMotionModal.format(0), x, y,  sOutput.format(1));
+    writeBlock(gMotionModal.format(0), x, y);
     feedOutput.reset();
   }
 }
@@ -333,14 +359,13 @@ function onLinear(_x, _y, _z, feed) {
       error(localize("Radius compensation mode is not supported."));
       return;
     } else {
-      writeBlock(gMotionModal.format(1), x, y, f, sOutput.format(213));
-      //writeBlock(gMotionModal.format(1), ); // laser off
+      writeBlock(gMotionModal.format(1), x, y, f);
     }
   } else if (f) {
     if (getNextRecord().isMotion()) { // try not to output feed without motion
       feedOutput.reset(); // force feed on next line
     } else {
-      writeBlock(gMotionModal.format(1), f, sOutput.format(212));
+      writeBlock(gMotionModal.format(1), f);
     }
   }
 }
@@ -444,9 +469,8 @@ function onSectionEnd() {
 }
 
 function onClose() {
-  // writeBlock(gMotionModal.format(1), sOutput.format(0)); // laser off
+  writeBlock(gMotionModal.format(1), sOutput.format(0)); // laser off
   writeBlock(mFormat.format(5)); // M5 laser off
-
   writeBlock(mFormat.format(30)); // stop program, spindle stop, coolant off
   writeln("%");
 }
